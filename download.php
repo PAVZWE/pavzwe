@@ -1,6 +1,6 @@
 // في ملف اسمه download.php
 <?php
-$file = 'files/' . $_GET['name']; //files/JOO.apk/
+$file = 'files/' . $_GET['name']; //pavzwe/files/JOO.apk/
 if (file_exists($file)) {
     header('Content-Description: File Transfer');
     header('Content-Type: application/octet-stream');
