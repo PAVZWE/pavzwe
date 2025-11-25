@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <title>السلام عليكم معكم مصطفى حسن</title>
+
+    <style>
+        /* كود CSS لتنسيق جزيئات الثلج وحركتها */
+        body {
+            margin: 0;
+            overflow: hidden; /* يخفي شريط التمرير إذا خرج الثلج عن الشاشة */
+            background-color: #e0f2f7; /* خلفية زرقاء فاتحة لتناسب الثلج */
+        }
+
+        .snowflake {
+            position: absolute;
+            background-color: #fff; /* لون الثلج أبيض */
+            border-radius: 50%; /* لجعلها دائرية */
+            opacity: 0.8; /* شفافية خفيفة */
+            animation: snowfall linear infinite; /* تطبيق حركة تساقط الثلج */
+            pointer-events: none; /* حتى لا تتداخل مع النقر على عناصر الموقع */
+            z-index: 9999; /* للتأكد من أنها تظهر فوق كل شيء */
+        }
+
+        /* تعريف حركة تساقط الثلج (keyframes) */
+        @keyframes snowfall {
+            0% {
+                transform: translateY(-100px); /* تبدأ من أعلى الشاشة */
+                opacity: 0;
+            }
+            20% {
+                opacity: 0.8;
+            }
+            100% {
+                transform: translateY(100vh); /* تنزل لأسفل الشاشة بالكامل */
+                opacity: 0;
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <h1>مرحباً بك في موقعي! الثلج يتساقط هنا!</h1>
+    <p>استمتع بالمنظر الجميل.</p>
+    
+    <script>
+        // كود JavaScript لإنشاء جزيئات الثلج وجعلها تتحرك
+        const body = document.body;
+        const numberOfSnowflakes = 50; // عدد حبات الثلج التي ستظهر
+
+        function createSnowflake() {
+            const snowflake = document.createElement('div');
+            snowflake.classList.add('snowflake');
+
+            // حجم عشوائي للثلج بين 5 و 15 بكسل
+            const size = Math.random() * 10 + 5; 
+            snowflake.style.width = size + 'px';
+            snowflake.style.height = size + 'px';
+
+            // موقع أفقي عشوائي للثلج (من أين سيبدأ التساقط)
+            snowflake.style.left = Math.random() * 100 + 'vw'; 
+            
+            // سرعة تساقط عشوائية
+            const animationDuration = Math.random() * 8 + 5; // بين 5 و 13 ثانية
+            snowflake.style.animationDuration = animationDuration + 's';
+
+            // تأخير عشوائي لبداية الحركة لتظهر بشكل طبيعي
+            const animationDelay = Math.random() * 8; // بين 0 و 8 ثواني
+            snowflake.style.animationDelay = animationDelay + 's';
+
+            body.appendChild(snowflake);
+
+            // إزالة حبة الثلج بعد انتهائها من الحركة لتجنب تراكم العناصر
+            snowflake.addEventListener('animationend', () => {
+                snowflake.remove();
+                // إعادة إنشاء حبة ثلج جديدة للحفاظ على العدد
+                createSnowflake(); 
+            });
+        }
+
+        // إنشاء العدد المحدد من حبات الثلج عند تحميل الصفحة
+        for (let i = 0; i < numberOfSnowflakes; i++) {
+            createSnowflake();
+        }
+    </script>
+
+</body>
+</html>
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <title>موقعي الخاص</title>
+</head>
+<body>
+
+    <h1>💚💚💚💚</h1>
+    <p>😀😀😀💚</p>
+
+    <script>
+        // دالة alert() هي التي تظهر الإشعار المنبثق
+        alert("م💚💚💚💚💚💚");
+    </script>
+    
+</body>
+</html>
