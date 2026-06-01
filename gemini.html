@@ -1,0 +1,1598 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>فوتوشوب ويب برو - محرر صور ذكي مع حماية بصرية</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- MediaPipe Body Segmentation -->
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-core"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-backend-webgl"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/body-segmentation"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --primary: #ff914d;
+            --primary-dark: #e66f2c;
+            --secondary: #FFB347;
+            --bg-dark: #0a0d14;
+            --bg-light: #1a1e2c;
+            --border: #2d3348;
+            --text: #eef4ff;
+            --text-muted: #cbd5ff;
+            --guard-yellow: #FFD700;
+        }
+
+        html, body {
+            height: 100%;
+            width: 100%;
+        }
+
+        body {
+            background: linear-gradient(145deg, var(--bg-light) 0%, var(--bg-dark) 100%);
+            font-family: 'Segoe UI', 'Cairo', system-ui, -apple-system, sans-serif;
+            color: var(--text);
+            overflow: hidden;
+        }
+
+        .app-container {
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            background: rgba(15, 20, 30, 0.95);
+            backdrop-filter: blur(10px);
+        }
+
+        /* ===== HEADER ===== */
+        .header {
+            background: linear-gradient(135deg, rgba(11, 14, 23, 0.95) 0%, rgba(15, 20, 30, 0.9) 100%);
+            padding: 1rem 1.5rem;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 1rem;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+            z-index: 100;
+        }
+
+        .logo {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            flex: 1;
+            min-width: 200px;
+        }
+
+        .logo h1 {
+            font-size: 1.4rem;
+            font-weight: 700;
+            background: linear-gradient(135deg, var(--secondary), var(--primary));
+            -webkit-background-clip: text;
+            background-clip: text;
+            -webkit-text-fill-color: transparent;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .logo p {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            margin-top: 2px;
+        }
+
+        .header-actions {
+            display: flex;
+            gap: 0.8rem;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+
+        .upload-btn {
+            background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+            border: none;
+            padding: 0.7rem 1.2rem;
+            border-radius: 8px;
+            color: white;
+            font-weight: 600;
+            font-size: 0.9rem;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            box-shadow: 0 4px 12px rgba(255, 145, 77, 0.3);
+        }
+
+        .upload-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 16px rgba(255, 145, 77, 0.4);
+        }
+
+        .upload-btn input {
+            display: none;
+        }
+
+        .download-btn {
+            background: linear-gradient(135deg, #4CAF50, #45a049);
+            border: none;
+            padding: 0.7rem 1.2rem;
+            border-radius: 8px;
+            color: white;
+            font-weight: 600;
+            font-size: 0.9rem;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            box-shadow: 0 4px 12px rgba(76, 175, 80, 0.3);
+        }
+
+        .download-btn:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 16px rgba(76, 175, 80, 0.4);
+        }
+
+        .download-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .ai-status {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding: 0.5rem 1rem;
+            background: rgba(76, 175, 80, 0.15);
+            border: 1px solid rgba(76, 175, 80, 0.3);
+            border-radius: 8px;
+            font-size: 0.85rem;
+            color: #4CAF50;
+        }
+
+        .ai-status.loading {
+            background: rgba(255, 193, 7, 0.15);
+            border-color: rgba(255, 193, 7, 0.3);
+            color: #ffc107;
+        }
+
+        /* ===== MAIN WORKSPACE ===== */
+        .workspace {
+            display: flex;
+            flex: 1;
+            gap: 0;
+            overflow: hidden;
+        }
+
+        /* ===== CANVAS AREA ===== */
+        .canvas-area {
+            flex: 1;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 1.5rem;
+            background: repeating-conic-gradient(
+                #2a2f3f 0% 25%,
+                #1e2232 0% 50%
+            );
+            background-size: 30px 30px;
+            overflow: auto;
+            position: relative;
+        }
+
+        .canvas-wrapper {
+            background: var(--bg-dark);
+            border-radius: 16px;
+            padding: 16px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.6);
+            border: 1px solid var(--border);
+            max-width: 100%;
+            max-height: 100%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            position: relative;
+        }
+
+        .canvas-container {
+            position: relative;
+            display: inline-block;
+        }
+
+        canvas {
+            display: block;
+            border-radius: 12px;
+            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.4);
+            background: #f0f2f5;
+            cursor: crosshair;
+            max-width: 100%;
+            max-height: 100%;
+            object-fit: contain;
+        }
+
+        #guardOverlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            border-radius: 12px;
+            display: none;
+        }
+
+        /* ===== TOOLS PANEL ===== */
+        .tools-panel {
+            width: 400px;
+            background: linear-gradient(180deg, rgba(15, 20, 30, 0.95) 0%, rgba(11, 14, 23, 0.95) 100%);
+            backdrop-filter: blur(10px);
+            padding: 1.2rem;
+            border-left: 1px solid var(--border);
+            overflow-y: auto;
+            box-shadow: -4px 0 12px rgba(0, 0, 0, 0.3);
+        }
+
+        .tools-panel::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        .tools-panel::-webkit-scrollbar-thumb {
+            background: var(--primary);
+            border-radius: 3px;
+        }
+
+        .tool-section {
+            margin-bottom: 1.5rem;
+            padding-bottom: 1.5rem;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .tool-section:last-child {
+            border-bottom: none;
+        }
+
+        .tool-title {
+            font-size: 0.95rem;
+            font-weight: 700;
+            margin-bottom: 12px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            color: var(--secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .btn-group {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            margin-bottom: 12px;
+        }
+
+        button, .action-btn {
+            background: rgba(42, 49, 74, 0.8);
+            border: 1px solid var(--border);
+            padding: 10px 14px;
+            border-radius: 8px;
+            color: var(--text);
+            font-weight: 500;
+            font-size: 0.85rem;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            white-space: nowrap;
+        }
+
+        button:hover:not(:disabled) {
+            background: rgba(62, 71, 104, 0.9);
+            border-color: var(--primary);
+            transform: translateY(-1px);
+        }
+
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+            border: none;
+            color: white;
+        }
+
+        .btn-success {
+            background: linear-gradient(135deg, #4CAF50, #45a049);
+            border: none;
+            color: white;
+        }
+
+        .btn-danger {
+            background: linear-gradient(135deg, #f44336, #da190b);
+            border: none;
+            color: white;
+        }
+
+        .active-tool {
+            background: linear-gradient(135deg, var(--primary), var(--primary-dark)) !important;
+            border-color: var(--primary) !important;
+            box-shadow: 0 0 12px rgba(255, 145, 77, 0.5);
+            color: white !important;
+        }
+
+        .slider-container {
+            margin-bottom: 12px;
+        }
+
+        .slider-label {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.8rem;
+            margin-bottom: 6px;
+            color: var(--text-muted);
+            font-weight: 500;
+        }
+
+        input[type="range"] {
+            width: 100%;
+            height: 6px;
+            background: rgba(37, 44, 63, 0.8);
+            border-radius: 10px;
+            -webkit-appearance: none;
+            appearance: none;
+            outline: none;
+        }
+
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 16px;
+            height: 16px;
+            background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+            border-radius: 50%;
+            cursor: pointer;
+            box-shadow: 0 2px 8px rgba(255, 145, 77, 0.4);
+        }
+
+        .color-control {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-top: 8px;
+            flex-wrap: wrap;
+        }
+
+        input[type="color"] {
+            width: 40px;
+            height: 40px;
+            border: 2px solid var(--border);
+            border-radius: 8px;
+            cursor: pointer;
+        }
+
+        input[type="text"].hex-input {
+            background: rgba(37, 44, 63, 0.8);
+            border: 1px solid var(--border);
+            padding: 6px 8px;
+            border-radius: 6px;
+            color: var(--text);
+            font-family: 'Courier New', monospace;
+            font-size: 0.85rem;
+            width: 100px;
+            text-align: center;
+        }
+
+        input[type="text"].hex-input:focus {
+            outline: none;
+            border-color: var(--primary);
+            box-shadow: 0 0 8px rgba(255, 145, 77, 0.3);
+        }
+
+        .color-preview {
+            width: 32px;
+            height: 32px;
+            border-radius: 6px;
+            border: 2px solid var(--border);
+            display: inline-block;
+            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+        }
+
+        .info-badge {
+            font-size: 0.75rem;
+            background: rgba(255, 215, 0, 0.15);
+            border: 1px solid rgba(255, 215, 0, 0.3);
+            display: block;
+            padding: 8px 10px;
+            border-radius: 6px;
+            margin-top: 8px;
+            color: var(--text-muted);
+            line-height: 1.4;
+        }
+
+        .status-message {
+            background: rgba(76, 175, 80, 0.15);
+            border: 1px solid rgba(76, 175, 80, 0.3);
+            padding: 10px 12px;
+            border-radius: 6px;
+            font-size: 0.85rem;
+            margin-bottom: 12px;
+            text-align: center;
+            animation: slideIn 0.3s ease;
+        }
+
+        .status-message.error {
+            background: rgba(244, 67, 54, 0.15);
+            border-color: rgba(244, 67, 54, 0.3);
+            color: #ff6b6b;
+        }
+
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateY(-10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .protection-toggle {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 10px;
+            background: rgba(255, 215, 0, 0.1);
+            border: 1px solid rgba(255, 215, 0, 0.3);
+            border-radius: 8px;
+            margin-top: 8px;
+        }
+
+        .toggle-switch {
+            position: relative;
+            width: 40px;
+            height: 24px;
+            background: #ccc;
+            border-radius: 12px;
+            cursor: pointer;
+            transition: background 0.3s;
+        }
+
+        .toggle-switch.active {
+            background: var(--guard-yellow);
+        }
+
+        .toggle-switch::after {
+            content: '';
+            position: absolute;
+            width: 20px;
+            height: 20px;
+            background: white;
+            border-radius: 50%;
+            top: 2px;
+            left: 2px;
+            transition: left 0.3s;
+        }
+
+        .toggle-switch.active::after {
+            left: 18px;
+        }
+
+        .numeric-inputs {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+            margin-top: 8px;
+        }
+
+        .numeric-input-group {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .numeric-input-group label {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            font-weight: 600;
+        }
+
+        .numeric-input-group input {
+            background: rgba(37, 44, 63, 0.8);
+            border: 1px solid var(--border);
+            padding: 6px 8px;
+            border-radius: 6px;
+            color: var(--text);
+            font-family: 'Courier New', monospace;
+            font-size: 0.8rem;
+            text-align: center;
+        }
+
+        .numeric-input-group input:focus {
+            outline: none;
+            border-color: var(--primary);
+            box-shadow: 0 0 8px rgba(255, 145, 77, 0.3);
+        }
+
+        /* ===== FOOTER ===== */
+        footer {
+            background: rgba(11, 14, 23, 0.8);
+            border-top: 1px solid var(--border);
+            padding: 0.8rem 1.5rem;
+            text-align: center;
+            font-size: 0.75rem;
+            color: var(--text-muted);
+        }
+
+        /* ===== RESPONSIVE ===== */
+        @media (max-width: 768px) {
+            .workspace {
+                flex-direction: column-reverse;
+            }
+
+            .tools-panel {
+                width: 100%;
+                max-height: 40vh;
+                border-left: none;
+                border-top: 1px solid var(--border);
+            }
+
+            .header {
+                flex-direction: column;
+                align-items: stretch;
+            }
+        }
+    </style>
+</head>
+<body>
+<div class="app-container">
+    <!-- HEADER -->
+    <div class="header">
+        <div class="logo">
+            <h1><i class="fas fa-shield-alt"></i> فوتوشوب برو</h1>
+            <p>محرر صور ذكي مع حدود حماية بصرية</p>
+        </div>
+        <div class="header-actions">
+            <label class="upload-btn">
+                <i class="fas fa-cloud-upload-alt"></i>
+                <span>رفع صورة</span>
+                <input type="file" id="imageUpload" accept="image/jpeg,image/png,image/webp,image/bmp,image/gif">
+            </label>
+            <button class="download-btn" id="downloadBtn" disabled>
+                <i class="fas fa-download"></i>
+                <span>تحميل PNG</span>
+            </button>
+            <div class="ai-status" id="aiStatus">
+                <i class="fas fa-microchip"></i>
+                <span>جاهز</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- MAIN WORKSPACE -->
+    <div class="workspace">
+        <!-- CANVAS AREA -->
+        <div class="canvas-area">
+            <div class="canvas-wrapper">
+                <div class="canvas-container">
+                    <canvas id="mainCanvas" width="600" height="400"></canvas>
+                    <canvas id="guardOverlay" width="600" height="400"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <!-- TOOLS PANEL -->
+        <div class="tools-panel">
+            <div id="statusContainer"></div>
+
+            <!-- SMART PROTECTION SECTION -->
+            <div class="tool-section">
+                <div class="tool-title">
+                    <i class="fas fa-shield-alt"></i>
+                    حماية ذكية (AI)
+                </div>
+                <div class="protection-toggle">
+                    <span>عرض الحدود الصفراء:</span>
+                    <div class="toggle-switch active" id="protectionToggle"></div>
+                </div>
+                <div class="info-badge">
+                    <i class="fas fa-eye"></i>
+                    الخطوط الصفراء تظهر مناطق الحماية. الألوان ممنوعة من تجاوزها
+                </div>
+            </div>
+
+            <!-- COLOR SWAPPER SECTION -->
+            <div class="tool-section">
+                <div class="tool-title">
+                    <i class="fas fa-palette"></i>
+                    تبديل الألوان
+                </div>
+                <div class="btn-group">
+                    <button id="pickSourceColorBtn" class="action-btn">
+                        <i class="fas fa-eye-dropper"></i>
+                        اختيار اللون المراد تبديله
+                    </button>
+                </div>
+                <div class="color-control">
+                    <span>اللون الأصلي:</span>
+                    <div id="sourceColorPreview" class="color-preview" style="background:#ff0000;"></div>
+                </div>
+                <div class="numeric-inputs">
+                    <div class="numeric-input-group">
+                        <label>Hex</label>
+                        <input type="text" class="hex-input" id="sourceHexInput" value="FF0000" maxlength="6">
+                    </div>
+                    <div class="numeric-input-group">
+                        <label>حساسية</label>
+                        <input type="number" id="colorTolerance" value="30" min="5" max="100">
+                    </div>
+                </div>
+                <div class="color-control" style="margin-top: 12px;">
+                    <span>اللون الجديد:</span>
+                    <input type="color" id="targetSwapColor" value="#0000ff">
+                    <div id="targetColorPreview" class="color-preview" style="background:#0000ff;"></div>
+                </div>
+                <div class="numeric-inputs">
+                    <div class="numeric-input-group">
+                        <label>Hex</label>
+                        <input type="text" class="hex-input" id="targetHexInput" value="0000FF" maxlength="6">
+                    </div>
+                    <div class="numeric-input-group">
+                        <label>شفافية %</label>
+                        <input type="number" id="alphaInput" value="100" min="0" max="100">
+                    </div>
+                </div>
+                <button id="applyColorSwapBtn" class="btn-success" style="width: 100%; margin-top: 8px;">
+                    <i class="fas fa-exchange-alt"></i>
+                    تطبيق تبديل اللون
+                </button>
+                <div class="info-badge">
+                    <i class="fas fa-lightbulb"></i>
+                    أدخل قيم Hex مباشرة أو استخدم الألوان. التحكم الرقمي دقيق جداً
+                </div>
+            </div>
+
+            <!-- MAGIC RECTANGLE SECTION -->
+            <div class="tool-section">
+                <div class="tool-title">
+                    <i class="fas fa-draw-polygon"></i>
+                    المربع السحري
+                </div>
+                <div class="btn-group">
+                    <button id="activateRectSelectBtn" class="action-btn">
+                        <i class="fas fa-vector-square"></i>
+                        تفعيل التحديد
+                    </button>
+                    <button id="applyRectReplaceBtn" class="btn-success">
+                        <i class="fas fa-fill-drip"></i>
+                        تطبيق اللون
+                    </button>
+                    <button id="cancelRectBtn" class="btn-danger">
+                        <i class="fas fa-times"></i>
+                        إلغاء
+                    </button>
+                </div>
+                <div class="color-control">
+                    <span>اللون الجديد:</span>
+                    <input type="color" id="rectTargetColor" value="#ff44aa">
+                    <div id="rectColorPreview" class="color-preview" style="background:#ff44aa;"></div>
+                </div>
+                <div class="numeric-inputs">
+                    <div class="numeric-input-group">
+                        <label>Hex</label>
+                        <input type="text" class="hex-input" id="rectHexInput" value="FF44AA" maxlength="6">
+                    </div>
+                </div>
+                <div class="info-badge">
+                    <i class="fas fa-lightbulb"></i>
+                    الحدود الصفراء محمية. التغيير لن يتجاوز الخطوط
+                </div>
+            </div>
+
+            <!-- BASIC ADJUSTMENTS -->
+            <div class="tool-section">
+                <div class="tool-title">
+                    <i class="fas fa-sliders-h"></i>
+                    الضبط الأساسي
+                </div>
+
+                <div class="slider-container">
+                    <div class="slider-label">
+                        <span>السطوع</span>
+                        <span id="brightnessVal">0</span>
+                    </div>
+                    <input type="range" id="brightness" min="-100" max="100" value="0" step="1">
+                </div>
+
+                <div class="slider-container">
+                    <div class="slider-label">
+                        <span>التباين</span>
+                        <span id="contrastVal">0</span>
+                    </div>
+                    <input type="range" id="contrast" min="-100" max="100" value="0" step="1">
+                </div>
+
+                <div class="slider-container">
+                    <div class="slider-label">
+                        <span>التشبع</span>
+                        <span id="saturationVal">1.00</span>
+                    </div>
+                    <input type="range" id="saturation" min="0" max="2" value="1" step="0.01">
+                </div>
+
+                <div class="slider-container">
+                    <div class="slider-label">
+                        <span>الضبابية (Blur)</span>
+                        <span id="blurVal">0px</span>
+                    </div>
+                    <input type="range" id="blur" min="0" max="20" value="0" step="1">
+                </div>
+            </div>
+
+            <!-- ADDITIONAL TOOLS -->
+            <div class="tool-section">
+                <div class="tool-title">
+                    <i class="fas fa-toolbox"></i>
+                    أدوات إضافية
+                </div>
+                <div class="btn-group">
+                    <button id="autoEnhanceBtn" class="btn-primary">
+                        <i class="fas fa-sparkles"></i>
+                        تحسين تلقائي
+                    </button>
+                    <button id="rotateLeft" class="action-btn">
+                        <i class="fas fa-undo-alt"></i>
+                        تدوير يسار
+                    </button>
+                    <button id="rotateRight" class="action-btn">
+                        <i class="fas fa-redo-alt"></i>
+                        تدوير يمين
+                    </button>
+                    <button id="resetAllBtn" class="action-btn">
+                        <i class="fas fa-redo"></i>
+                        استعادة الأصلية
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- FOOTER -->
+    <footer>
+        <i class="fas fa-check-circle"></i>
+        محرر صور برو مع حماية بصرية • خطوط صفراء ذكية • تحكم رقمي دقيق
+    </footer>
+</div>
+
+<script>
+    (function() {
+        'use strict';
+
+        // ==================== DOM ELEMENTS ====================
+        const canvas = document.getElementById('mainCanvas');
+        const ctx = canvas.getContext('2d', { alpha: true });
+        const guardOverlay = document.getElementById('guardOverlay');
+        const guardCtx = guardOverlay.getContext('2d', { alpha: true });
+        const uploadInput = document.getElementById('imageUpload');
+        const downloadBtn = document.getElementById('downloadBtn');
+        const statusContainer = document.getElementById('statusContainer');
+        const aiStatus = document.getElementById('aiStatus');
+        const protectionToggle = document.getElementById('protectionToggle');
+
+        // Image state
+        let originalImage = null;
+        let uploadedMasterImage = null;
+        let isImageLoaded = false;
+        let segmentationMask = null;
+        let isProtectionEnabled = true;
+        let showGuardLines = true;
+        let segmenter = null;
+
+        // Filter elements
+        const brightnessSlider = document.getElementById('brightness');
+        const contrastSlider = document.getElementById('contrast');
+        const saturationSlider = document.getElementById('saturation');
+        const blurSlider = document.getElementById('blur');
+
+        // Color swapper elements
+        const pickSourceColorBtn = document.getElementById('pickSourceColorBtn');
+        const sourceColorPreview = document.getElementById('sourceColorPreview');
+        const sourceHexInput = document.getElementById('sourceHexInput');
+        const colorToleranceInput = document.getElementById('colorTolerance');
+        const targetSwapColor = document.getElementById('targetSwapColor');
+        const targetColorPreview = document.getElementById('targetColorPreview');
+        const targetHexInput = document.getElementById('targetHexInput');
+        const alphaInput = document.getElementById('alphaInput');
+        const applyColorSwapBtn = document.getElementById('applyColorSwapBtn');
+
+        // Rectangle selection elements
+        const activateRectSelectBtn = document.getElementById('activateRectSelectBtn');
+        const applyRectReplaceBtn = document.getElementById('applyRectReplaceBtn');
+        const cancelRectBtn = document.getElementById('cancelRectBtn');
+        const rectTargetColor = document.getElementById('rectTargetColor');
+        const rectColorPreview = document.getElementById('rectColorPreview');
+        const rectHexInput = document.getElementById('rectHexInput');
+
+        // Rectangle selection state
+        let rectSelectActive = false;
+        let rectStart = { x: 0, y: 0 };
+        let rectEnd = { x: 0, y: 0 };
+        let isDrawingRect = false;
+
+        // Color swapper state
+        let sourceColorRGB = { r: 255, g: 0, b: 0 };
+        let isPickingSourceColor = false;
+
+        // Additional tools
+        const autoEnhanceBtn = document.getElementById('autoEnhanceBtn');
+        const rotateLeftBtn = document.getElementById('rotateLeft');
+        const rotateRightBtn = document.getElementById('rotateRight');
+        const resetAllBtn = document.getElementById('resetAllBtn');
+
+        let updateTimer = null;
+
+        // ==================== UTILITY FUNCTIONS ====================
+        function hexToRgb(hex) {
+            const result = /^([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+            return result ? {
+                r: parseInt(result[1], 16),
+                g: parseInt(result[2], 16),
+                b: parseInt(result[3], 16)
+            } : null;
+        }
+
+        function rgbToHex(r, g, b) {
+            return [r, g, b].map(x => {
+                const hex = x.toString(16);
+                return hex.length === 1 ? '0' + hex : hex;
+            }).join('').toUpperCase();
+        }
+
+        function showStatus(message, type = 'success') {
+            statusContainer.innerHTML = `<div class="status-message ${type}"><i class="fas fa-${type === 'error' ? 'exclamation-circle' : 'check-circle'}"></i> ${message}</div>`;
+            if (type === 'success') {
+                setTimeout(() => {
+                    statusContainer.innerHTML = '';
+                }, 4000);
+            }
+        }
+
+        function updateDownloadBtn() {
+            downloadBtn.disabled = !isImageLoaded;
+        }
+
+        // ==================== AI SEGMENTATION ====================
+        async function initializeSegmenter() {
+            try {
+                aiStatus.innerHTML = '<i class="fas fa-spinner fa-spin"></i><span>جاري تحميل...</span>';
+                const model = bodySegmentation.SupportedModels.MediaPipeSelfieSegmentation;
+                const segmenterConfig = {
+                    runtime: 'mediapipe',
+                    modelType: 'general'
+                };
+                segmenter = await bodySegmentation.createSegmenter(model, segmenterConfig);
+                aiStatus.innerHTML = '<i class="fas fa-microchip"></i><span>جاهز</span>';
+                return true;
+            } catch (error) {
+                console.error('Error initializing segmenter:', error);
+                aiStatus.innerHTML = '<i class="fas fa-exclamation-circle"></i><span>خطأ</span>';
+                return false;
+            }
+        }
+
+        async function updateSegmentationMask() {
+            if (!segmenter || !originalImage || !isProtectionEnabled) return;
+
+            try {
+                const people = await segmenter.segmentPeople(originalImage);
+                if (people.length > 0) {
+                    const maskData = await people[0].mask.toImageData();
+                    segmentationMask = maskData;
+                }
+            } catch (error) {
+                console.error('Segmentation error:', error);
+            }
+        }
+
+        // ==================== GUARD LINES RENDERING ====================
+        function drawGuardLines() {
+            if (!showGuardLines || !segmentationMask || !isImageLoaded) {
+                guardCtx.clearRect(0, 0, guardOverlay.width, guardOverlay.height);
+                return;
+            }
+
+            guardCtx.clearRect(0, 0, guardOverlay.width, guardOverlay.height);
+
+            const maskData = segmentationMask.data;
+            const width = segmentationMask.width;
+            const height = segmentationMask.height;
+
+            // Create a temporary canvas for edge detection
+            const tempCanvas = document.createElement('canvas');
+            tempCanvas.width = width;
+            tempCanvas.height = height;
+            const tempCtx = tempCanvas.getContext('2d');
+            tempCtx.putImageData(segmentationMask, 0, 0);
+
+            // Draw yellow outlines around protected areas
+            guardCtx.strokeStyle = 'rgba(255, 215, 0, 0.8)';
+            guardCtx.lineWidth = 3;
+            guardCtx.lineCap = 'round';
+            guardCtx.lineJoin = 'round';
+
+            // Simple edge detection for guard lines
+            for (let y = 1; y < height - 1; y++) {
+                for (let x = 1; x < width - 1; x++) {
+                    const idx = (y * width + x) * 4;
+                    const alpha = maskData[idx + 3];
+
+                    // Check if this is an edge pixel
+                    const neighbors = [
+                        maskData[((y - 1) * width + x) * 4 + 3],
+                        maskData[((y + 1) * width + x) * 4 + 3],
+                        maskData[(y * width + (x - 1)) * 4 + 3],
+                        maskData[(y * width + (x + 1)) * 4 + 3]
+                    ];
+
+                    const isEdge = (alpha > 128 && neighbors.some(n => n <= 128)) ||
+                                   (alpha <= 128 && neighbors.some(n => n > 128));
+
+                    if (isEdge) {
+                        guardCtx.fillStyle = 'rgba(255, 215, 0, 0.6)';
+                        guardCtx.fillRect(x, y, 1, 1);
+                    }
+                }
+            }
+
+            // Draw contour lines
+            guardCtx.strokeStyle = 'rgba(255, 215, 0, 0.9)';
+            guardCtx.lineWidth = 2;
+            guardCtx.beginPath();
+
+            let isDrawing = false;
+            for (let y = 0; y < height; y++) {
+                for (let x = 0; x < width; x++) {
+                    const idx = (y * width + x) * 4;
+                    const alpha = maskData[idx + 3];
+
+                    if (alpha > 128) {
+                        if (!isDrawing) {
+                            guardCtx.moveTo(x, y);
+                            isDrawing = true;
+                        } else {
+                            guardCtx.lineTo(x, y);
+                        }
+                    } else {
+                        isDrawing = false;
+                    }
+                }
+            }
+            guardCtx.stroke();
+        }
+
+        // ==================== IMAGE PROCESSING ====================
+        function applyBasicFiltersToImageData(imageData, brightness, contrast, saturation) {
+            const data = imageData.data;
+            const len = data.length;
+            const brightVal = brightness * 2.55;
+            const contrastFactor = (contrast + 100) / 100;
+
+            for (let i = 0; i < len; i += 4) {
+                let r = data[i], g = data[i + 1], b = data[i + 2];
+
+                r = r + brightVal;
+                g = g + brightVal;
+                b = b + brightVal;
+
+                r = (r - 128) * contrastFactor + 128;
+                g = (g - 128) * contrastFactor + 128;
+                b = (b - 128) * contrastFactor + 128;
+
+                const gray = 0.299 * r + 0.587 * g + 0.114 * b;
+                r = gray + (r - gray) * saturation;
+                g = gray + (g - gray) * saturation;
+                b = gray + (b - gray) * saturation;
+
+                data[i] = Math.min(255, Math.max(0, r));
+                data[i + 1] = Math.min(255, Math.max(0, g));
+                data[i + 2] = Math.min(255, Math.max(0, b));
+            }
+
+            return imageData;
+        }
+
+        function swapColors(imageData, sourceRGB, targetRGB, tolerance, alpha, protectMask = null) {
+            const data = imageData.data;
+            const len = data.length;
+            const tolSq = tolerance * tolerance;
+            const alphaValue = Math.round((alpha / 100) * 255);
+
+            for (let i = 0; i < len; i += 4) {
+                // Check if pixel is protected (HARD MASKING)
+                if (protectMask && isProtectionEnabled) {
+                    const maskData = protectMask.data;
+                    if (maskData[i + 3] > 128) {
+                        continue; // SKIP - CANNOT MODIFY PROTECTED PIXELS
+                    }
+                }
+
+                const r = data[i], g = data[i + 1], b = data[i + 2];
+                const dr = r - sourceRGB.r;
+                const dg = g - sourceRGB.g;
+                const db = b - sourceRGB.b;
+                const distSq = dr * dr + dg * dg + db * db;
+
+                if (distSq <= tolSq) {
+                    data[i] = targetRGB.r;
+                    data[i + 1] = targetRGB.g;
+                    data[i + 2] = targetRGB.b;
+                    data[i + 3] = alphaValue;
+                }
+            }
+
+            return imageData;
+        }
+
+        function replaceColorsInRect(imageData, rectLeft, rectTop, rectW, rectH, targetRGB, protectMask = null) {
+            const data = imageData.data;
+            const width = imageData.width;
+            const height = imageData.height;
+
+            for (let y = rectTop; y < rectTop + rectH; y++) {
+                for (let x = rectLeft; x < rectLeft + rectW; x++) {
+                    if (x >= 0 && x < width && y >= 0 && y < height) {
+                        const idx = (y * width + x) * 4;
+
+                        // Check if pixel is protected (HARD MASKING)
+                        if (protectMask && isProtectionEnabled) {
+                            const maskData = protectMask.data;
+                            if (maskData[idx + 3] > 128) {
+                                continue; // SKIP - CANNOT MODIFY PROTECTED PIXELS
+                            }
+                        }
+
+                        data[idx] = targetRGB.r;
+                        data[idx + 1] = targetRGB.g;
+                        data[idx + 2] = targetRGB.b;
+                    }
+                }
+            }
+
+            return imageData;
+        }
+
+        // ==================== PERMANENT OPERATIONS ====================
+        function applyPermanentOperation(operationCallback) {
+            if (!isImageLoaded || !originalImage) return;
+
+            const tempCanvas = document.createElement('canvas');
+            tempCanvas.width = originalImage.width;
+            tempCanvas.height = originalImage.height;
+            const tempCtx = tempCanvas.getContext('2d', { alpha: true });
+            tempCtx.drawImage(originalImage, 0, 0);
+
+            let imgData = tempCtx.getImageData(0, 0, originalImage.width, originalImage.height);
+            imgData = operationCallback(imgData);
+            tempCtx.putImageData(imgData, 0, 0);
+
+            tempCanvas.toBlob(blob => {
+                const url = URL.createObjectURL(blob);
+                const newImg = new Image();
+                newImg.onload = () => {
+                    originalImage = newImg;
+                    canvas.width = originalImage.width;
+                    canvas.height = originalImage.height;
+                    guardOverlay.width = originalImage.width;
+                    guardOverlay.height = originalImage.height;
+                    if (rectSelectActive) disableRectSelect();
+                    debouncedUpdate();
+                    URL.revokeObjectURL(url);
+                };
+                newImg.src = url;
+            }, 'image/png');
+        }
+
+        // ==================== COLOR SWAPPER ====================
+        function pickSourceColorFromCanvas() {
+            if (!isImageLoaded) {
+                showStatus('❌ يرجى رفع صورة أولاً', 'error');
+                return;
+            }
+
+            isPickingSourceColor = true;
+            pickSourceColorBtn.classList.add('active-tool');
+            showStatus('🔍 انقر على اللون الذي تريد تبديله');
+
+            const handlePick = (e) => {
+                if (!isPickingSourceColor) return;
+
+                const rect = canvas.getBoundingClientRect();
+                const scaleX = canvas.width / rect.width;
+                const scaleY = canvas.height / rect.height;
+                let cx, cy;
+
+                if (e.touches) {
+                    cx = e.touches[0].clientX;
+                    cy = e.touches[0].clientY;
+                } else {
+                    cx = e.clientX;
+                    cy = e.clientY;
+                }
+
+                let canvasX = (cx - rect.left) * scaleX;
+                let canvasY = (cy - rect.top) * scaleY;
+                canvasX = Math.min(Math.max(0, canvasX), canvas.width - 1);
+                canvasY = Math.min(Math.max(0, canvasY), canvas.height - 1);
+
+                const offCanvas = document.createElement('canvas');
+                offCanvas.width = originalImage.width;
+                offCanvas.height = originalImage.height;
+                const offCtx = offCanvas.getContext('2d');
+                offCtx.drawImage(originalImage, 0, 0);
+
+                const pixel = offCtx.getImageData(canvasX, canvasY, 1, 1).data;
+                sourceColorRGB = { r: pixel[0], g: pixel[1], b: pixel[2] };
+
+                const hexColor = rgbToHex(sourceColorRGB.r, sourceColorRGB.g, sourceColorRGB.b);
+                sourceColorPreview.style.backgroundColor = `rgb(${sourceColorRGB.r}, ${sourceColorRGB.g}, ${sourceColorRGB.b})`;
+                sourceHexInput.value = hexColor;
+
+                showStatus('✅ تم اختيار اللون');
+
+                isPickingSourceColor = false;
+                pickSourceColorBtn.classList.remove('active-tool');
+                canvas.removeEventListener('click', handlePick);
+                canvas.removeEventListener('touchstart', handlePick);
+            };
+
+            canvas.addEventListener('click', handlePick);
+            canvas.addEventListener('touchstart', handlePick);
+
+            setTimeout(() => {
+                if (isPickingSourceColor) {
+                    isPickingSourceColor = false;
+                    pickSourceColorBtn.classList.remove('active-tool');
+                }
+            }, 15000);
+        }
+
+        function applyColorSwap() {
+            if (!isImageLoaded || !originalImage) {
+                showStatus('❌ لا توجد صورة', 'error');
+                return;
+            }
+
+            const tolerance = parseInt(colorToleranceInput.value);
+            const alpha = parseInt(alphaInput.value);
+
+            // Get target color from hex input
+            const targetHex = targetHexInput.value.toUpperCase();
+            const targetRGB = hexToRgb(targetHex);
+            if (!targetRGB) {
+                showStatus('❌ قيمة Hex غير صحيحة', 'error');
+                return;
+            }
+
+            targetColorPreview.style.backgroundColor = `rgb(${targetRGB.r}, ${targetRGB.g}, ${targetRGB.b})`;
+
+            applyPermanentOperation((imgData) => {
+                return swapColors(imgData, sourceColorRGB, targetRGB, tolerance, alpha, segmentationMask);
+            });
+
+            showStatus('✅ تم تبديل اللون (الحدود الصفراء محمية)');
+        }
+
+        // ==================== RECTANGLE SELECTION ====================
+        function getMouseCoords(e) {
+            const rect = canvas.getBoundingClientRect();
+            const scaleX = canvas.width / rect.width;
+            const scaleY = canvas.height / rect.height;
+            let cx, cy;
+
+            if (e.touches) {
+                cx = e.touches[0].clientX;
+                cy = e.touches[0].clientY;
+            } else {
+                cx = e.clientX;
+                cy = e.clientY;
+            }
+
+            let x = (cx - rect.left) * scaleX;
+            let y = (cy - rect.top) * scaleY;
+
+            return {
+                x: Math.min(Math.max(0, x), canvas.width),
+                y: Math.min(Math.max(0, y), canvas.height)
+            };
+        }
+
+        function onRectMouseDown(e) {
+            if (!rectSelectActive || !isImageLoaded) return;
+            e.preventDefault();
+            rectStart = getMouseCoords(e);
+            rectEnd = rectStart;
+            isDrawingRect = true;
+        }
+
+        function onRectMouseMove(e) {
+            if (!rectSelectActive || !isDrawingRect) return;
+            e.preventDefault();
+            rectEnd = getMouseCoords(e);
+            updateCanvasPreview();
+        }
+
+        function onRectMouseUp(e) {
+            if (!rectSelectActive) return;
+            isDrawingRect = false;
+            updateCanvasPreview();
+        }
+
+        function activateRectSelect() {
+            if (!isImageLoaded) {
+                showStatus('❌ يرجى رفع صورة أولاً', 'error');
+                return;
+            }
+
+            if (rectSelectActive) {
+                disableRectSelect();
+                return;
+            }
+
+            rectSelectActive = true;
+            activateRectSelectBtn.classList.add('active-tool');
+            showStatus('✂️ اسحب لتحديد منطقة');
+
+            canvas.addEventListener('mousedown', onRectMouseDown);
+            canvas.addEventListener('mousemove', onRectMouseMove);
+            canvas.addEventListener('mouseup', onRectMouseUp);
+            canvas.addEventListener('touchstart', onRectMouseDown);
+            canvas.addEventListener('touchmove', onRectMouseMove);
+            canvas.addEventListener('touchend', onRectMouseUp);
+
+            updateCanvasPreview();
+        }
+
+        function disableRectSelect() {
+            rectSelectActive = false;
+            activateRectSelectBtn.classList.remove('active-tool');
+
+            canvas.removeEventListener('mousedown', onRectMouseDown);
+            canvas.removeEventListener('mousemove', onRectMouseMove);
+            canvas.removeEventListener('mouseup', onRectMouseUp);
+            canvas.removeEventListener('touchstart', onRectMouseDown);
+            canvas.removeEventListener('touchmove', onRectMouseMove);
+            canvas.removeEventListener('touchend', onRectMouseUp);
+
+            rectStart = { x: 0, y: 0 };
+            rectEnd = { x: 0, y: 0 };
+            updateCanvasPreview();
+        }
+
+        function applyRectReplace() {
+            if (!isImageLoaded || !originalImage) {
+                showStatus('❌ لا توجد صورة', 'error');
+                return;
+            }
+
+            const w = Math.abs(rectEnd.x - rectStart.x);
+            const h = Math.abs(rectEnd.y - rectStart.y);
+
+            if (!rectSelectActive || w < 2 || h < 2) {
+                showStatus('⚠️ قم بتحديد منطقة صالحة', 'warning');
+                return;
+            }
+
+            const left = Math.min(rectStart.x, rectEnd.x);
+            const top = Math.min(rectStart.y, rectEnd.y);
+
+            const rectHex = rectHexInput.value.toUpperCase();
+            const targetRGB = hexToRgb(rectHex);
+            if (!targetRGB) {
+                showStatus('❌ قيمة Hex غير صحيحة', 'error');
+                return;
+            }
+
+            rectColorPreview.style.backgroundColor = `rgb(${targetRGB.r}, ${targetRGB.g}, ${targetRGB.b})`;
+
+            applyPermanentOperation((imgData) => {
+                return replaceColorsInRect(imgData, left, top, w, h, targetRGB, segmentationMask);
+            });
+
+            showStatus('✅ تم تغيير ألوان المنطقة (الحدود محمية)');
+            disableRectSelect();
+        }
+
+        // ==================== CANVAS PREVIEW ====================
+        function updateCanvasPreview() {
+            if (!isImageLoaded || !originalImage) {
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                ctx.fillStyle = '#2a2f3f';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                ctx.fillStyle = '#ffffff80';
+                ctx.font = "18px 'Segoe UI'";
+                ctx.textAlign = 'center';
+                ctx.fillText('📸 رفع صورة', canvas.width / 2, canvas.height / 2);
+                return;
+            }
+
+            const brightness = parseInt(brightnessSlider.value);
+            const contrast = parseInt(contrastSlider.value);
+            const saturation = parseFloat(saturationSlider.value);
+            const blur = parseInt(blurSlider.value);
+
+            // Update value displays
+            document.getElementById('brightnessVal').textContent = brightness;
+            document.getElementById('contrastVal').textContent = contrast;
+            document.getElementById('saturationVal').textContent = saturation.toFixed(2);
+            document.getElementById('blurVal').textContent = blur + 'px';
+
+            const tempCanvas = document.createElement('canvas');
+            tempCanvas.width = originalImage.width;
+            tempCanvas.height = originalImage.height;
+            const tempCtx = tempCanvas.getContext('2d', { alpha: true });
+            
+            // Apply CSS filters for performance and quality (especially for blur)
+            tempCtx.filter = `brightness(${100 + brightness}%) contrast(${100 + contrast}%) saturate(${saturation * 100}%) blur(${blur}px)`;
+            tempCtx.drawImage(originalImage, 0, 0);
+
+            if (canvas.width !== originalImage.width || canvas.height !== originalImage.height) {
+                canvas.width = originalImage.width;
+                canvas.height = originalImage.height;
+                guardOverlay.width = originalImage.width;
+                guardOverlay.height = originalImage.height;
+            }
+
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.drawImage(tempCanvas, 0, 0);
+
+            // Draw guard lines
+            drawGuardLines();
+
+            // Draw rectangle selection
+            if (rectSelectActive && rectStart && rectEnd && Math.abs(rectEnd.x - rectStart.x) > 2) {
+                const left = Math.min(rectStart.x, rectEnd.x);
+                const top = Math.min(rectStart.y, rectEnd.y);
+                const w = Math.abs(rectEnd.x - rectStart.x);
+                const h = Math.abs(rectEnd.y - rectStart.y);
+
+                ctx.save();
+                ctx.strokeStyle = '#ff914d';
+                ctx.lineWidth = 3;
+                ctx.setLineDash([8, 8]);
+                ctx.strokeRect(left, top, w, h);
+                ctx.fillStyle = '#ff3366aa';
+                ctx.fillRect(left, top, w, h);
+                ctx.setLineDash([]);
+                ctx.restore();
+            }
+        }
+
+        function debouncedUpdate() {
+            if (updateTimer) clearTimeout(updateTimer);
+            updateTimer = setTimeout(() => {
+                if (isImageLoaded) updateCanvasPreview();
+            }, 10);
+        }
+
+        // ==================== FILTER OPERATIONS ====================
+        function resetFilters() {
+            brightnessSlider.value = '0';
+            contrastSlider.value = '0';
+            saturationSlider.value = '1';
+            blurSlider.value = '0';
+            debouncedUpdate();
+        }
+
+        function autoEnhance() {
+            brightnessSlider.value = '22';
+            contrastSlider.value = '18';
+            saturationSlider.value = '1.2';
+            debouncedUpdate();
+            showStatus('✨ تم تطبيق التحسين التلقائي');
+        }
+
+        function resetToOriginal() {
+            if (!uploadedMasterImage) return;
+
+            const img = new Image();
+            img.onload = () => {
+                originalImage = img;
+                isImageLoaded = true;
+                canvas.width = originalImage.width;
+                canvas.height = originalImage.height;
+                guardOverlay.width = originalImage.width;
+                guardOverlay.height = originalImage.height;
+                if (rectSelectActive) disableRectSelect();
+                resetFilters();
+                updateDownloadBtn();
+                updateSegmentationMask();
+                showStatus('🔄 تم استعادة الصورة الأصلية');
+                debouncedUpdate();
+            };
+            img.src = uploadedMasterImage.src;
+        }
+
+        function applyTransformAndUpdate(type) {
+            if (!isImageLoaded) return;
+
+            const tempCanvas = document.createElement('canvas');
+            const tCtx = tempCanvas.getContext('2d', { alpha: true });
+            let w = originalImage.width, h = originalImage.height;
+
+            if (type === 'rotateRight') {
+                tempCanvas.width = h;
+                tempCanvas.height = w;
+                tCtx.translate(h / 2, w / 2);
+                tCtx.rotate(Math.PI / 2);
+                tCtx.drawImage(originalImage, -w / 2, -h / 2);
+            } else if (type === 'rotateLeft') {
+                tempCanvas.width = h;
+                tempCanvas.height = w;
+                tCtx.translate(h / 2, w / 2);
+                tCtx.rotate(-Math.PI / 2);
+                tCtx.drawImage(originalImage, -w / 2, -h / 2);
+            }
+
+            tempCanvas.toBlob(blob => {
+                const url = URL.createObjectURL(blob);
+                const img = new Image();
+                img.onload = () => {
+                    originalImage = img;
+                    canvas.width = originalImage.width;
+                    canvas.height = originalImage.height;
+                    guardOverlay.width = originalImage.width;
+                    guardOverlay.height = originalImage.height;
+                    updateSegmentationMask();
+                    debouncedUpdate();
+                    URL.revokeObjectURL(url);
+                };
+                img.src = url;
+            }, 'image/png');
+        }
+
+        // ==================== IMAGE LOADING ====================
+        function loadImageFromFile(file) {
+            if (!file.type.startsWith('image/')) {
+                showStatus('❌ يرجى اختيار ملف صورة صحيح', 'error');
+                return;
+            }
+
+            const reader = new FileReader();
+            reader.onerror = () => {
+                showStatus('❌ خطأ في قراءة الملف', 'error');
+            };
+
+            reader.onload = (e) => {
+                const img = new Image();
+                img.onerror = () => {
+                    showStatus('❌ خطأ في تحميل الصورة', 'error');
+                };
+
+                img.onload = () => {
+                    originalImage = img;
+                    uploadedMasterImage = img;
+                    isImageLoaded = true;
+                    canvas.width = originalImage.width;
+                    canvas.height = originalImage.height;
+                    guardOverlay.width = originalImage.width;
+                    guardOverlay.height = originalImage.height;
+                    disableRectSelect();
+                    resetFilters();
+                    updateDownloadBtn();
+                    updateSegmentationMask();
+                    showStatus(`✅ تم رفع الصورة (${originalImage.width}x${originalImage.height}px)`);
+                    debouncedUpdate();
+                };
+
+                img.src = e.target.result;
+            };
+
+            reader.readAsDataURL(file);
+        }
+
+        // ==================== HEX INPUT HANDLERS ====================
+        sourceHexInput.addEventListener('change', (e) => {
+            const hex = e.target.value.toUpperCase();
+            if (/^[0-9A-F]{6}$/.test(hex)) {
+                const rgb = hexToRgb(hex);
+                sourceColorRGB = rgb;
+                sourceColorPreview.style.backgroundColor = `rgb(${rgb.r}, ${rgb.g}, ${rgb.b})`;
+            }
+        });
+
+        targetHexInput.addEventListener('change', (e) => {
+            const hex = e.target.value.toUpperCase();
+            if (/^[0-9A-F]{6}$/.test(hex)) {
+                const rgb = hexToRgb(hex);
+                targetColorPreview.style.backgroundColor = `rgb(${rgb.r}, ${rgb.g}, ${rgb.b})`;
+                targetSwapColor.value = `#${hex}`;
+            }
+        });
+
+        rectHexInput.addEventListener('change', (e) => {
+            const hex = e.target.value.toUpperCase();
+            if (/^[0-9A-F]{6}$/.test(hex)) {
+                rectColorPreview.style.backgroundColor = `#${hex}`;
+                rectTargetColor.value = `#${hex}`;
+            }
+        });
+
+        targetSwapColor.addEventListener('input', (e) => {
+            const hex = e.target.value.substring(1).toUpperCase();
+            targetColorPreview.style.backgroundColor = e.target.value;
+            targetHexInput.value = hex;
+        });
+
+        rectTargetColor.addEventListener('input', (e) => {
+            const hex = e.target.value.substring(1).toUpperCase();
+            rectColorPreview.style.backgroundColor = e.target.value;
+            rectHexInput.value = hex;
+        });
+
+        // ==================== EVENT LISTENERS ====================
+        uploadInput.addEventListener('change', (e) => {
+            if (e.target.files[0]) {
+                loadImageFromFile(e.target.files[0]);
+            }
+        });
+
+        downloadBtn.addEventListener('click', () => {
+            if (isImageLoaded) {
+                const link = document.createElement('a');
+                link.download = 'result.png';
+                link.href = canvas.toDataURL('image/png');
+                link.click();
+                showStatus('✅ تم تحميل الصورة');
+            }
+        });
+
+        protectionToggle.addEventListener('click', () => {
+            showGuardLines = !showGuardLines;
+            protectionToggle.classList.toggle('active');
+            debouncedUpdate();
+        });
+
+        rotateLeftBtn.addEventListener('click', () => applyTransformAndUpdate('rotateLeft'));
+        rotateRightBtn.addEventListener('click', () => applyTransformAndUpdate('rotateRight'));
+        resetAllBtn.addEventListener('click', resetToOriginal);
+        autoEnhanceBtn.addEventListener('click', autoEnhance);
+
+        activateRectSelectBtn.addEventListener('click', activateRectSelect);
+        applyRectReplaceBtn.addEventListener('click', applyRectReplace);
+        cancelRectBtn.addEventListener('click', disableRectSelect);
+
+        pickSourceColorBtn.addEventListener('click', pickSourceColorFromCanvas);
+        applyColorSwapBtn.addEventListener('click', applyColorSwap);
+
+        colorToleranceInput.addEventListener('input', (e) => {
+            e.target.value = Math.min(100, Math.max(5, parseInt(e.target.value) || 5));
+        });
+
+        alphaInput.addEventListener('input', (e) => {
+            e.target.value = Math.min(100, Math.max(0, parseInt(e.target.value) || 100));
+        });
+
+        brightnessSlider.addEventListener('input', debouncedUpdate);
+        contrastSlider.addEventListener('input', debouncedUpdate);
+        saturationSlider.addEventListener('input', debouncedUpdate);
+        blurSlider.addEventListener('input', debouncedUpdate);
+
+        // ==================== INITIALIZATION ====================
+        (async () => {
+            await initializeSegmenter();
+            updateDownloadBtn();
+            updateCanvasPreview();
+        })();
+    })();
+</script>
+</body>
+</html>
